@@ -1,0 +1,189 @@
+BROKER SCHEMA thub.conn.bhub.http
+
+DECLARE BE_BHUB_NAME CONSTANT CHARACTER 'BHUB';
+-- release version value from CST 1698 for THUB
+DECLARE THUB_DEFAULT_RELEASE_VERSION CONSTANT CHARACTER '100001';
+
+CREATE COMPUTE MODULE ConnBhubHttp_OverrideInitContext
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		CALL CopyEntireMessage();
+		-- prepare MV and MT from root name for correct logging
+		DECLARE initOverrideContextRef REFERENCE TO Environment;
+		CALL cz.lapio.v1.public.connector.methods.getOverrideInitContextReference(Environment, initOverrideContextRef);
+		DECLARE rootNameChar CHARACTER FIELDNAME(InputRoot.XMLNSC.SRVC_REQ.*[<]);
+		DECLARE rootNamespaceChar CHARACTER FIELDNAMESPACE(InputRoot.XMLNSC.SRVC_REQ.*[<]);
+		SET initOverrideContextRef.MessageType = SUBSTRING(rootNameChar BEFORE 'Request');
+		SET initOverrideContextRef.MessageVersion = SUBSTRING(rootNamespaceChar FROM LENGTH(rootNamespaceChar) FOR 1);
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;
+
+
+CREATE COMPUTE MODULE ConnBhubHttp_GetConnectorConfiguration
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- get endpoint configuration
+		DECLARE rootName CHARACTER FIELDNAME(InputRoot.XMLNSC.*);
+		DECLARE rootNs CHARACTER FIELDNAMESPACE(InputRoot.XMLNSC.*);
+		DECLARE mt CHARACTER rootName;
+		DECLARE mv CHARACTER SUBSTRING(rootNs FROM LENGTH(rootNs) FOR 1);
+		DECLARE soapAction CHARACTER mt||'_v'||mv;
+
+		CALL cz.lapio.v1.public.connector.core.config.getService(BE_BHUB_NAME, mt, mv, rootNs, Environment);
+		CALL cz.lapio.v1.public.connector.core.config.createLocalEnvironmentForHttpRequest(OutputLocalEnvironment, Environment);
+		
+		-- get Authentication properties
+		DECLARE username CHARACTER COALESCE(cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'Username'), '');
+		DECLARE password CHARACTER COALESCE(cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'Password'), '');
+		-- get reference to MeteHeader
+		DECLARE inMetaHeaderRef REFERENCE TO Environment;
+		CALL cz.lapio.v1.public.shared_components.methods.context.getMetaHeaderReference(Environment, inMetaHeaderRef);
+		-- add soap action to http header
+		DECLARE soapActionBe CHARACTER COALESCE(cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'SOAPAction'), '');
+		CALL cz.lapio.v1.private.connector.core.methods.http.v1.addFieldToHttpRequestHederImpl(Environment,'SOAPAction',soapActionBe);
+		-- declare SoapHeader
+		DECLARE soapHeader REFERENCE TO Environment;
+		CREATE LASTCHILD OF InputLocalEnvironment DOMAIN 'XMLNSC' NAME 'Variables';
+		CREATE LASTCHILD OF InputLocalEnvironment.Variables AS soapHeader NAME 'SoapHeader';
+		-- declare output MetaHeader
+		DECLARE outHeaderRef REFERENCE TO Environment;
+		CREATE LASTCHILD OF OutputLocalEnvironment DOMAIN 'XMLNSC' NAME 'Variables';
+		CREATE LASTCHILD OF OutputLocalEnvironment.Variables AS outHeaderRef NAME 'Header';
+		-- get MetaHeader version
+		DECLARE metaHeaderVersion CHARACTER COALESCE(cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'MetaHeaderVersion'), '');
+		-- map correct MetaHeader version based service configuration
+		IF metaHeaderVersion = '2' THEN
+			CALL mapMetaHeaderV2(inMetaHeaderRef, soapAction, outHeaderRef);
+		ELSE
+			CALL mapMetaHeaderV1(inMetaHeaderRef, soapAction, outHeaderRef);
+		END IF;
+		-- add MetaHeader to SoapHeader
+		CALL cz.lapio.v1.public.connector.core.message.addSoapHeader(Environment, outHeaderRef.*[<]);
+		DETACH outHeaderRef.*[<];
+		-- add DirHeader if exists to SoapHeader
+		DECLARE dirHeaderRef REFERENCE TO Environment;
+		CALL cz.lapio.v1.public.connector.methods.dir_header_v2.getDirHeaderv2Reference(Environment, dirHeaderRef);
+		IF LASTMOVE(dirHeaderRef) THEN
+			CALL cz.lapio.v1.public.connector.core.message.addSoapHeader(Environment, dirHeaderRef);
+		END IF;
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE mapMetaHeaderV1(IN inMetaHeaderRef REFERENCE, IN soapAction CHARACTER, INOUT outHeaderRef REFERENCE) BEGIN
+		DECLARE meta NAMESPACE 'http://www.csob.cz/bhub/metaheader';
+		DECLARE soapHeader REFERENCE TO Environment;
+		CREATE LASTCHILD OF outHeaderRef AS soapHeader NAMESPACE meta NAME 'MetaHeader';
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'HeaderVersion' VALUE '5';
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'SessionId' VALUE inMetaHeaderRef.*:SessionID;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'BusinessProcessOriginator';
+		CREATE LASTCHILD OF soapHeader.*:BusinessProcessOriginator NAMESPACE meta NAME 'System' VALUE COALESCE(inMetaHeaderRef.*:BusinessProcessOriginator.*:System, 'THUB');
+		CREATE LASTCHILD OF soapHeader.*:BusinessProcessOriginator NAMESPACE meta NAME 'Company' VALUE COALESCE(inMetaHeaderRef.*:BusinessProcessOriginator.*:Company, '1');
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'BusinessUniqueID' VALUE inMetaHeaderRef.*:BusinessUniqueID;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'BuidSequence' VALUE inMetaHeaderRef.*:BuidSequence;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'Data';
+		CREATE LASTCHILD OF soapHeader.*:Data NAMESPACE meta NAME 'Type' VALUE SUBSTRING(soapAction BEFORE '_');
+		CREATE LASTCHILD OF soapHeader.*:Data NAMESPACE meta NAME 'Version' VALUE SUBSTRING(soapAction AFTER '_v');
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'OriginalSource';
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'TimeStamp' VALUE inMetaHeaderRef.*:OriginalSource.*:TimeStamp;
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'User' VALUE inMetaHeaderRef.*:OriginalSource.*:User;
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'System' VALUE inMetaHeaderRef.*:OriginalSource.*:System;
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'Company' VALUE inMetaHeaderRef.*:OriginalSource.*:Company;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'UltimateTarget';
+		CREATE LASTCHILD OF soapHeader.*:UltimateTarget NAMESPACE meta NAME 'System' VALUE COALESCE(inMetaHeaderRef.*:UltimateTarget.*:System, 'BHUB');
+		CREATE LASTCHILD OF soapHeader.*:UltimateTarget NAMESPACE meta NAME 'Company' VALUE COALESCE(inMetaHeaderRef.*:UltimateTarget.*:Company, '1');
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'Retry';
+		CREATE LASTCHILD OF soapHeader.*:Retry NAMESPACE meta NAME 'Counter' VALUE COALESCE(inMetaHeaderRef.*:Retry.*:Counter, '1');
+	END;
+
+	CREATE PROCEDURE mapMetaHeaderV2(IN inMetaHeaderRef REFERENCE, IN soapAction CHARACTER, INOUT outHeaderRef REFERENCE) BEGIN
+		DECLARE meta NAMESPACE 'http://www.csob.cz/bhub/metaheader/v2';
+		DECLARE soapHeader REFERENCE TO Environment;
+		CREATE LASTCHILD OF outHeaderRef AS soapHeader NAMESPACE meta NAME 'MetaHeader';
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'HeaderVersion' VALUE inMetaHeaderRef.*:HeaderVersion;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'SessionId' VALUE inMetaHeaderRef.*:SessionID;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'BusinessProcessOriginator';
+		CREATE LASTCHILD OF soapHeader.*:BusinessProcessOriginator NAMESPACE meta NAME 'System' VALUE COALESCE(inMetaHeaderRef.*:BusinessProcessOriginator.*:System, 'THUB');
+		CREATE LASTCHILD OF soapHeader.*:BusinessProcessOriginator NAMESPACE meta NAME 'Company' VALUE COALESCE(inMetaHeaderRef.*:BusinessProcessOriginator.*:Company, '1');
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'BusinessUniqueID' VALUE inMetaHeaderRef.*:BusinessUniqueID;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'BuidSequence' VALUE inMetaHeaderRef.*:BuidSequence;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'Data';
+		CREATE LASTCHILD OF soapHeader.*:Data NAMESPACE meta NAME 'Type' VALUE SUBSTRING(soapAction BEFORE '_');
+		CREATE LASTCHILD OF soapHeader.*:Data NAMESPACE meta NAME 'Version' VALUE SUBSTRING(soapAction AFTER '_v');
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'OriginalSource';
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'TimeStamp' VALUE inMetaHeaderRef.*:OriginalSource.*:TimeStamp;
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'User' VALUE inMetaHeaderRef.*:OriginalSource.*:User;
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'System' VALUE inMetaHeaderRef.*:OriginalSource.*:System;
+		CREATE LASTCHILD OF soapHeader.*:OriginalSource NAMESPACE meta NAME 'Company' VALUE inMetaHeaderRef.*:OriginalSource.*:Company;
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'UltimateTarget';
+		CREATE LASTCHILD OF soapHeader.*:UltimateTarget NAMESPACE meta NAME 'System' VALUE COALESCE(inMetaHeaderRef.*:UltimateTarget.*:System, 'BHUB');
+		CREATE LASTCHILD OF soapHeader.*:UltimateTarget NAMESPACE meta NAME 'Company' VALUE COALESCE(inMetaHeaderRef.*:UltimateTarget.*:Company, '1');
+		CREATE LASTCHILD OF soapHeader NAMESPACE meta NAME 'Retry';
+		CREATE LASTCHILD OF soapHeader.*:Retry NAMESPACE meta NAME 'Counter' VALUE COALESCE(inMetaHeaderRef.*:Retry.*:Counter, '1');
+	END;
+END MODULE;
+
+
+CREATE FILTER MODULE ConnBhubHttp_SetUpErrorHandling
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE errorType CHARACTER;
+		DECLARE errorCode CHARACTER;
+		DECLARE isFatal BOOLEAN FALSE;
+		
+		DECLARE bhubError REFERENCE TO Root.XMLNSC.*:Envelope.*:Body.*:Fault.*:detail.*:BhubError;		
+		
+		IF NOT LASTMOVE(bhubError) THEN
+			SET errorCode = cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment,'HardErrorCode');
+			SET isFatal = TRUE;
+		ELSE
+			SET errorCode = FIELDVALUE(bhubError.*:ErrorCode);
+		END IF;
+		
+		IF errorCode IN (500, 504, 502) THEN
+			--080000 - EN_L_System error - please contact Helpdesk. Internal Integrator Error
+			CALL cz.lapio.v1.public.shared_components.methods.exception.throwSoftException('080000', 'Error from BHUB: ' || bhubError.*:ErrorMessage, NULL, NULL, NULL);
+		ELSE
+			CALL cz.lapio.v1.private.connector.core.methods.error.handling.v1.markAsHardError(Environment,errorCode,isFatal);
+		END IF;
+		
+		RETURN TRUE;
+	END;
+
+END MODULE;
+/*
+* Function returns Spec which is used for piloting. Spec is derived from element ReleaseVersion in MetaHeader. (ReleaseVersion -> Spec)
+*
+* If element ReleaseVersion doesn't exist in input message then default thub value is used. This default value is in CST 1698.
+* For translation ReleaseVersion to Spec is used CST 1699. If translation doesn't exist then incomming value without translation is used.
+*
+*/
+CREATE FUNCTION GetTargetSystemSpecForRelaseVersion(IN metaHeaderRef REFERENCE) RETURNS CHARACTER
+BEGIN
+	DECLARE data ROW;
+	DECLARE targetSystemSpec CHARACTER;
+	DECLARE releaseVersion CHARACTER;
+	DECLARE targetSystemId CHARACTER cz.lapio.v1.public.shared_components.methods.translateFromCstCodeToDataId('MQ_CST_320A', BE_BHUB_NAME, metaHeaderRef, metaHeaderRef);
+	-- check if release version exists in request
+	IF EXISTS(metaHeaderRef.*:ReleaseVersion[]) THEN
+		SET releaseVersion = FIELDVALUE(metaHeaderRef.*:ReleaseVersion);
+	ELSE
+		-- default release version is set
+		SET releaseVersion = THUB_DEFAULT_RELEASE_VERSION;
+	END IF;
+	-- check if exists configuration in CST1699
+	SET data.rows[] = PASSTHRU('SELECT code FROM MQ_CST1699_v1 WHERE data_id = ?', targetSystemId || ':' || releaseVersion);
+	IF EXISTS(data.rows[]) THEN
+		-- translation of ReleaseVersion to Spec
+		SET targetSystemSpec = cz.lapio.v1.public.shared_components.methods.translateFromCstDataIdToCode('MQ_CST1699_v1', targetSystemId || ':' || releaseVersion, metaHeaderRef, metaHeaderRef);
+	ELSE
+		-- incomming value withou translation is used
+		SET targetSystemSpec = releaseVersion;
+	END IF;
+	RETURN targetSystemSpec;
+END;

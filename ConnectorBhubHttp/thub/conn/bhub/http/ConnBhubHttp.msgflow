@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ComIbmCompute.msgnode="ComIbmCompute.msgnode" xmlns:ComIbmFilter.msgnode="ComIbmFilter.msgnode" xmlns:cz_lapio_v1_public_connector_error_handling_soapFaultWithGfHandler.subflow="cz/lapio/v1/public/connector/error/handling/soapFaultWithGfHandler.subflow" xmlns:cz_lapio_v1_public_connector_http_send_httpSoapRequestReplySender.subflow="cz/lapio/v1/public/connector/http/send/httpSoapRequestReplySender.subflow" xmlns:cz_lapio_v1_public_connector_input_srvcConnectorInput.subflow="cz/lapio/v1/public/connector/input/srvcConnectorInput.subflow"
+    xmlns:cz_lapio_v1_public_shared_components_input_mqInput.subflow="cz/lapio/v1/public/shared_components/input/mqInput.subflow" xmlns:cz_lapio_v1_public_shared_components_reply_srvcResponder.subflow="cz/lapio/v1/public/shared_components/reply/srvcResponder.subflow" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" xmlns:eflow="http://www.ibm.com/wbi/2005/eflow" xmlns:utility="http://www.ibm.com/wbi/2005/eflow_utility" nsURI="thub/conn/bhub/http/ConnBhubHttp.msgflow" nsPrefix="thub_conn_bhub_http_ConnBhubHttp.msgflow">
+  <eClassifiers xmi:type="eflow:FCMComposite" name="FCMComposite_1">
+    <eSuperTypes href="http://www.ibm.com/wbi/2005/eflow#//FCMBlock"/>
+    <translation xmi:type="utility:TranslatableString" key="ConnBhubHttp" bundleName="thub/conn/bhub/http/ConnBhubHttp" pluginId="ConnectorsBhubHttp"/>
+    <colorGraphic16 xmi:type="utility:GIFFileGraphic" resourceName="platform:/plugin/ConnectorsBhubHttp/icons/full/obj16/ConnBhubHttp.gif"/>
+    <colorGraphic32 xmi:type="utility:GIFFileGraphic" resourceName="platform:/plugin/ConnectorsBhubHttp/icons/full/obj30/ConnBhubHttp.gif"/>
+    <composition>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_7" location="252,220" computeExpression="esql://routine/thub.conn.bhub.http#ConnBhubHttp_OverrideInitContext.Main">
+        <translation xmi:type="utility:ConstantString" string="OverrideInitContext"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_8" location="487,225" dataSource="MQSIWBDB" computeExpression="esql://routine/thub.conn.bhub.http#ConnBhubHttp_GetConnectorConfiguration.Main" computeMode="destination">
+        <translation xmi:type="utility:ConstantString" string="GetConnectorConfiguration"/>
+      </nodes>
+      <nodes xmi:type="ComIbmFilter.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_9" location="824,234" filterExpression="esql://routine/thub.conn.bhub.http#ConnBhubHttp_SetUpErrorHandling.Main">
+        <translation xmi:type="utility:ConstantString" string="SetUpErrorHandling"/>
+      </nodes>
+      <nodes xmi:type="cz_lapio_v1_public_shared_components_input_mqInput.subflow:FCMComposite_1" xmi:id="FCMComposite_1_4" location="-3,216" queueName="THUB.CONN.BHUB.HTTP.SOAP.SRVC.INPUT">
+        <translation xmi:type="utility:ConstantString" string="THUB.CONN.BHUB.HTTP.SOAP.SRVC.INPUT"/>
+      </nodes>
+      <nodes xmi:type="cz_lapio_v1_public_connector_input_srvcConnectorInput.subflow:FCMComposite_1" xmi:id="FCMComposite_1_10" location="371,221" relatedSystem="BHUB">
+        <translation xmi:type="utility:ConstantString" string="srvcConnectorInput1"/>
+      </nodes>
+      <nodes xmi:type="cz_lapio_v1_public_connector_http_send_httpSoapRequestReplySender.subflow:FCMComposite_1" xmi:id="FCMComposite_1_11" location="659,226">
+        <translation xmi:type="utility:ConstantString" string="httpSoapRequestReplySender"/>
+      </nodes>
+      <nodes xmi:type="cz_lapio_v1_public_connector_error_handling_soapFaultWithGfHandler.subflow:FCMComposite_1" xmi:id="FCMComposite_1_12" location="993,246">
+        <translation xmi:type="utility:ConstantString" string="soapFaultWithGfHandler"/>
+      </nodes>
+      <nodes xmi:type="cz_lapio_v1_public_shared_components_reply_srvcResponder.subflow:FCMComposite_1" xmi:id="FCMComposite_1_13" location="1117,170">
+        <translation xmi:type="utility:ConstantString" string="srvcResponder"/>
+      </nodes>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_1" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_4" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_2" targetNode="FCMComposite_1_10" sourceNode="FCMComposite_1_7" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_3" targetNode="FCMComposite_1_8" sourceNode="FCMComposite_1_10" sourceTerminalName="OutTerminal.Output1" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_4" targetNode="FCMComposite_1_11" sourceNode="FCMComposite_1_8" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_5" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_11" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_6" targetNode="FCMComposite_1_9" sourceNode="FCMComposite_1_11" sourceTerminalName="OutTerminal.Output2" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_7" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_11" sourceTerminalName="OutTerminal.Output1" targetTerminalName="InTerminal.Input2"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_8" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_8" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.Input2"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_9" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_10" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.Input2"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_10" targetNode="FCMComposite_1_12" sourceNode="FCMComposite_1_9" sourceTerminalName="OutTerminal.true" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_11" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_9" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.Input2"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_12" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_9" sourceTerminalName="OutTerminal.unknown" targetTerminalName="InTerminal.Input2"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_13" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_12" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.Input2"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_14" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_12" sourceTerminalName="OutTerminal.Output1" targetTerminalName="InTerminal.Input1"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_15" targetNode="FCMComposite_1_13" sourceNode="FCMComposite_1_4" sourceTerminalName="OutTerminal.Output1" targetTerminalName="InTerminal.Input2"/>
+    </composition>
+    <propertyOrganizer/>
+    <stickyBoard>
+      <stickyNote location="189,304">
+        <body xmi:type="utility:ConstantString" string="TODO: ich namespace je ako nas = zle loguje&#xA;pridat na logger:&#xA;if layer connector - ignore namespace"/>
+      </stickyNote>
+    </stickyBoard>
+  </eClassifiers>
+</ecore:EPackage>
