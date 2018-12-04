@@ -1,7 +1,7 @@
 # .gitattributes
 # Map file extensions to git filters
 
-* filter=rcs-keywords
+*.sql filter=rcs-keywords
 *.h filter=rcs-keywords
 *.c filter=rcs-keywords
 *.cc filter=rcs-keywords
