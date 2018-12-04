@@ -1,0 +1,76 @@
+BROKER SCHEMA thub.conn.cmss.http
+
+DECLARE BE_NAME CONSTANT CHARACTER 'CMEBS';
+DECLARE THUB_NAME CONSTANT CHARACTER 'THESB';
+
+/**
+ *	Konektor slouzi pro pripojení k CMSS. System 3. strany. 
+ *  Nevyuziva se tedy MetaHeader struktura ale premapovava se do jejich specialni.
+ *
+**/
+CREATE COMPUTE MODULE ConnCmssHttp_GetConnectorConfig
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- get endpoint configuration
+		DECLARE rootName CHARACTER FIELDNAME(InputRoot.XMLNSC.*);	
+		DECLARE rootNamespace CHARACTER FIELDNAMESPACE(InputRoot.XMLNSC.*);
+		CALL cz.lapio.v1.public.connector.core.config.getService(BE_NAME, rootName, '*', rootNamespace, Environment);
+		CALL cz.lapio.v1.public.connector.core.config.createLocalEnvironmentForHttpRequest(OutputLocalEnvironment, Environment);
+		
+		-- get Authentication properties	
+		DECLARE username CHARACTER COALESCE(cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'Username'), '');
+		DECLARE password CHARACTER COALESCE(cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'Password'), '');
+		
+		-- get reference to MeteHeader
+		DECLARE inMetaHeaderRef REFERENCE TO Environment;
+		CALL cz.lapio.v1.public.shared_components.methods.context.getMetaHeaderReference(Environment, inMetaHeaderRef);
+		
+		DECLARE outHeaderRef REFERENCE TO Environment;
+		CREATE LASTCHILD OF OutputLocalEnvironment DOMAIN 'XMLNSC' NAME 'Variables';
+		CREATE LASTCHILD OF OutputLocalEnvironment.Variables AS outHeaderRef NAME 'Header';
+		
+		-- Create CMSS RequestHeader
+		SET OutputRoot = InputRoot;
+		CALL createCMSSRequestHeader(OutputRoot.XMLNSC.*:GetClientZoneSSOUrlRequest, inMetaHeaderRef);
+		
+		-- get soap action
+		/* nevyuziva se
+		DECLARE soapAction CHARACTER;
+		SET soapAction = cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment, 'SoapAction');
+		CALL cz.lapio.v1.private.connector.core.methods.http.v1.addFieldToHttpRequestHederImpl(Environment,'SOAPAction', soapAction);
+		*/		
+		
+		-- get and add WSS header 
+		IF username <> '' AND password <> '' THEN 
+			DECLARE createDate CHAR CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSSZZZ');
+			CALL cz.lapio.v1.public.connector.methods.soap.wss.createSecurityHeaderWithUsernameTokenPasswordText(outHeaderRef, username, password, createDate);
+			CALL cz.lapio.v1.public.connector.core.message.addSoapHeader(Environment, outHeaderRef.*[<]);
+		END IF;
+		
+		RETURN TRUE;
+	END;
+END MODULE;
+
+
+CREATE COMPUTE MODULE ConnCmssHttp_SetUpErrorHandling
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE errorCode CHARACTER;
+		DECLARE isFatal BOOLEAN FALSE;
+		SET errorCode = cz.lapio.v1.public.connector.core.config.getPropertyValue(Environment,'HardErrorCode');
+		SET isFatal = TRUE;
+		
+		CALL cz.lapio.v1.private.connector.core.methods.error.handling.v1.markAsHardError(Environment,errorCode,isFatal);
+
+		RETURN TRUE;
+	END;
+END MODULE;
+
+
+CREATE PROCEDURE createCMSSRequestHeader(INOUT outputRef REFERENCE, IN metaHeaderRef REFERENCE)
+BEGIN
+	DECLARE ns000 NAMESPACE 'http://service.cmss.cz/common/CommonMessage/v01';
+	SET outputRef.ns000:requestHeader.ns000:correlationId = metaHeaderRef.*:SessionID;
+	SET outputRef.ns000:requestHeader.ns000:messageId = UUIDASCHAR;
+	SET outputRef.ns000:requestHeader.ns000:sourceSystem = 'CSOB';
+END;

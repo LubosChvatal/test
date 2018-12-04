@@ -10,7 +10,7 @@ CREATE COMPUTE MODULE ConnBhubHttp_OverrideInitContext
 		CALL CopyEntireMessage();
 		-- prepare MV and MT from root name for correct logging
 		DECLARE initOverrideContextRef REFERENCE TO Environment;
-		CALL cz.lapio.v1.public.connector.methods.getOverrideInitContextReference(Environment, initOverrideContextRef);
+		CALL cz.lapio.v1.public.connector.methds.getOverrideInitContextReference(Environment, initOverrideContextRef);
 		DECLARE rootNameChar CHARACTER FIELDNAME(InputRoot.XMLNSC.SRVC_REQ.*[<]);
 		DECLARE rootNamespaceChar CHARACTER FIELDNAMESPACE(InputRoot.XMLNSC.SRVC_REQ.*[<]);
 		SET initOverrideContextRef.MessageType = SUBSTRING(rootNameChar BEFORE 'Request');
